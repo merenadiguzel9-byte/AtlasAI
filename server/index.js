@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const fetch = require('node-fetch');
 
 const app = express();
 const PORT = 3001;
@@ -12,37 +11,52 @@ app.use(express.json());
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Burası çok önemli: TripoSR motoruna doğrudan bağlantı
-const TRIPOSR_SPACE = 'stabilityai/TripoSR';
+// Karar verdiğimiz, şu an dünyadaki en iyi modellerden biri olan TRELLIS
+const TRELLIS_SPACE = "trellis-community/TRELLIS"; 
 
 app.post('/api/forge', upload.single('image'), async (req, res) => {
   try {
     const { Client } = await import('@gradio/client');
     
-    // Gradio bağlantısını kuruyoruz
-    const client = await Client.connect(TRIPOSR_SPACE);
+    console.log("🚀 Görsel işleniyor, TRELLIS motoru ateşlendi...");
     
-    // Fotoğrafı gönderiyoruz
+    // Gradio bağlantısı kuruluyor
+    const client = await Client.connect(TRELLIS_SPACE);
+    
+    // Görseli Blob'a çevirip gönderiyoruz (Gradio client için gerekli)
+    const imageBlob = new Blob([req.file.buffer], { type: req.file.mimetype });
+    
+    // TRELLIS parametreleri: Görsel, Seed, S3D Mode, Post-process
     const result = await client.predict("/process", [
-      req.file.buffer // Görsel verisi
+      imageBlob,
+      Math.floor(Math.random() * 100000), // Her seferinde farklı sonuç için random seed
+      "Standard", 
+      "Standard"
     ]);
 
-    // Eğer veri geldiyse frontend'e gönder
     if (result && result.data) {
+        // Gelen .glb dosyasının linkini alıyoruz
+        const glbUrl = result.data[0].url;
+
+        console.log("✅ Model hazır! .glb üretildi.");
+
+        // Frontend'e başarılı cevabı dönüyoruz
         res.json({ 
             status: 'success', 
-            modelUrl: result.data[0].url 
+            modelUrl: glbUrl,
+            format: 'glb',
+            note: "Model hazır kanka! 3D yazıcın (Ender 3 V3) için Slicer'da .3mf olarak kaydedebilirsin."
         });
     } else {
-        throw new Error("AI motoru boş cevap döndü.");
+        throw new Error("Motor cevap vermedi.");
     }
 
   } catch (error) {
-    console.error("Hata:", error);
-    res.status(500).json({ error: "AI motoru şu an meşgul, lütfen tekrar dene kanka!" });
+    console.error("❌ Hata oluştu:", error);
+    res.status(500).json({ error: "Motor şu an meşgul veya sıra var kanka, tekrar dene!" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend Sunucusu http://localhost:${PORT} üzerinde hazır!`);
+  console.log(`🔥 Atlas AI Backend Çalışıyor: http://localhost:${PORT}`);
 });
